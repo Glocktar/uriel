@@ -23,7 +23,6 @@ type Configuration struct {
 	dChannel	string
 	dBotID 		string
 	dToken		string
-	World		string
 }
 
 func main() {
