@@ -2,7 +2,7 @@ package main
 
 import (
 	"strings"
-	"strconv"
+	"log"
 	"fmt"
 	"time"
 	"io/ioutil"
@@ -15,14 +15,15 @@ import (
 
 var (
 	conf = Configuration{}
-	warning bool
+	warning = false
 )
 
 type Configuration struct {
-	dSession 	*discordgo.Session
-	dChannel	string
-	dBotID 		string
-	dToken		string
+	Session 	*discordgo.Session
+	Channel		string
+	BotID 		string
+	Token		string
+	World		string
 }
 
 func main() {
@@ -31,43 +32,41 @@ func main() {
 	//Configuration Loader
 	filebuff, err := ioutil.ReadFile("uriel_config.ini")
 	if err != nil {
-		fmt.Println("No configuration file found.")
+		log.Println("No configuration file found.")
 		panic(err)
 	}
 
 	fileconts := strings.Split(string(filebuff),"\r\n")
 	if len(fileconts) < 2 {
-		fmt.Println("No configuration file found.")
+		log.Println("No configuration file found.")
 		panic(err)
 	}
-	conf.dToken = fileconts[0]
-	conf.dChannel = fileconts[1]
+	conf.Token = fileconts[0]
+	conf.Channel = fileconts[1]
 	// ----------------------------
 
-	conf.dSession, err = discordgo.New("Bot " + conf.dToken)
+	conf.Session, err = discordgo.New("Bot " + conf.Token)
 	check(err)
 	
-	u, err := conf.dSession.User("@me")
+	u, err := conf.Session.User("@me")
 	check(err)
 	
-	conf.dBotID = u.ID
-	conf.dSession.AddHandler(commands)
+	conf.BotID = u.ID
+	conf.Session.AddHandler(commands)
 
-	err = conf.dSession.Open()
+	err = conf.Session.Open()
 	check(err)
 
-	fmt.Println("Uriel logged in.")
+	log.Println("Uriel logged in.")
 
-	warning = false
-
-	SetTimer(5 * time.Minute, Updater)
+	Updater()
 	
 	<-make(chan struct{})
 	return
 }
 
 func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == conf.dBotID {
+	if m.Author.ID == conf.BotID {
 		return
 	}
 	
@@ -75,29 +74,17 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 	fmt.Sscanf(m.Content,"%s %s %s %s",&cmd,&params,&params2,&params3)
 
 	if cmd == "!cmds" || cmd == "!cmd" || cmd == "!comandos" || cmd == "!commands" {
-		_, _ = s.ChannelMessageSend(conf.dChannel,"Comandos Uriel:\n!time : Muestra la hora del Uriel\n!hora : Muestra la hora de España\n!noticias : Muestra las noticias mas recientes de la página de Metin2.es\n!eventos : Muestra los eventos fijos del juego")
-	}
-
-	if cmd == "!time" {
-		_, _ = s.ChannelMessageSend(conf.dChannel,"Hora actual Venezuela : " + time.Now().Format(time.RFC850))
+		_, _ = s.ChannelMessageSend(conf.Channel,"Comandos Uriel:\n!hora : Muestra la hora local de Uriel\n!horaesp : Muestra la hora de España\n!noticias : Muestra las noticias mas recientes de la página de Metin2.es\n!eventos : Muestra los eventos fijos del juego")
 	}
 
 	if cmd == "!hora" {
-		resp, err := http.Get("https://24timezones.com/es_husohorario/madrid_hora_actual.php")
-		check(err)
-	
-		root, err := html.Parse(resp.Body)
-		check(err)
-	
-		matcher := func(n *html.Node) bool {
-			if n.DataAtom == atom.Span {
-				return scrape.Attr(n, "id") == "currentTime"
-			}
-			return false
-		}
-	
-		messagem, _ := scrape.Find(root,matcher)
-		_, _ = s.ChannelMessageSend(conf.dChannel,"Hora actual CEST: " + scrape.Text(messagem))
+		_, _ = s.ChannelMessageSend(conf.Channel,"Hora actual Venezuela : " + time.Now().Format(time.RFC850))
+	}
+
+	if cmd == "!horaesp" {
+		t := CEST()
+
+		_, _ = s.ChannelMessageSend(conf.Channel,"Hora actual España : " + t.Full)
 	}
 
 	if cmd == "!noticias" || cmd == "!news" {
@@ -115,173 +102,139 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		articles := scrape.FindAll(root, matcher)
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**Noticias Metin2.es**")
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**" + scrape.Text(articles[0]) + "**" + "\n" + scrape.Text(articles[1]))
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**" + scrape.Text(articles[2]) + "**" + "\n" + scrape.Text(articles[3]))
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**" + scrape.Text(articles[4]) + "**" + "\n" + scrape.Text(articles[5]))
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**" + scrape.Text(articles[6]) + "**" + "\n" + scrape.Text(articles[7]))
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**" + scrape.Text(articles[8]) + "**" + "\n" + scrape.Text(articles[9]))
+		_, _ = s.ChannelMessageSend(conf.Channel,"**Noticias Metin2.es**")
+		_, _ = s.ChannelMessageSend(conf.Channel,"**" + scrape.Text(articles[0]) + "**" + "\n" + scrape.Text(articles[1]))
+		_, _ = s.ChannelMessageSend(conf.Channel,"**" + scrape.Text(articles[2]) + "**" + "\n" + scrape.Text(articles[3]))
+		_, _ = s.ChannelMessageSend(conf.Channel,"**" + scrape.Text(articles[4]) + "**" + "\n" + scrape.Text(articles[5]))
+		_, _ = s.ChannelMessageSend(conf.Channel,"**" + scrape.Text(articles[6]) + "**" + "\n" + scrape.Text(articles[7]))
+		_, _ = s.ChannelMessageSend(conf.Channel,"**" + scrape.Text(articles[8]) + "**" + "\n" + scrape.Text(articles[9]))
 	}
 
 
 	if cmd == "!eventos" || cmd == "!event" || cmd == "!events" || cmd == "!evento" {
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**Eventos Metin2.es**")
-		_, _ = s.ChannelMessageSend(conf.dChannel,"**Lunes:**\n\t22:00-00:00 Drop de supermonturas\n\n**Martes:**\n\t16:00-18:00 Drop de supermonturas\n\n**Miércoles:**\n\t23:00-01:00 Drop de supermonturas\n\n**Jueves:**\n\t13:00-15:00 Drop de supermonturas\n\n**Viernes:**\n\t18:00-20:00 Drop de supermonturas\n\n**Sábado:**\n\t13:00-15:00 Drop de supermonturas\n\t18:00-00:00 (El segundo sábado de cada mes) Drop de cajas luz luna\n\tTodo el día (Último fin de semana de cada mes) Festival de la cosecha\n\n**Domingo:**\n\t13:00-15:00 Drop de supermonturas\n\t22:00-02:00 Drop de Alubias verdes del dragón\n\tTodo el día (Último fin de semana de cada mes) Festival de la cosecha\n\n**Cualquier día de la semana:**\n\tCompetición OX (Mínimo una vez por semana)\n\tDrop de telas delicadas 4 h. (Sin día ni hora predefinido, sale el mensaje en el juego cuando comienza)\n\tDrop de Cor Draconis 4 h. (Sin día ni hora predefinido, sale el mensaje en el juego cuando comienza).")
+		_, _ = s.ChannelMessageSend(conf.Channel,"**Eventos Metin2.es**")
+		_, _ = s.ChannelMessageSend(conf.Channel,"\n**Lunes:**\n\t22:00-00:00 Drop de supermonturas\n\n**Martes:**\n\t16:00-18:00 Drop de supermonturas\n\n**Miércoles:**\n\t23:00-01:00 Drop de supermonturas\n\n**Jueves:**\n\t13:00-15:00 Drop de supermonturas\n\n**Viernes:**\n\t18:00-20:00 Drop de supermonturas\n\n**Sábado:**\n\t13:00-15:00 Drop de supermonturas\n\t18:00-00:00 (El segundo sábado de cada mes) Drop de cajas luz luna\n\tTodo el día (Último fin de semana de cada mes) Festival de la cosecha\n\n**Domingo:**\n\t13:00-15:00 Drop de supermonturas\n\t22:00-02:00 Drop de Alubias verdes del dragón\n\tTodo el día (Último fin de semana de cada mes) Festival de la cosecha\n\n**Cualquier día de la semana:**\n\tCompetición OX (Mínimo una vez por semana)\n\tDrop de telas delicadas 4 h. (Sin día ni hora predefinido, sale el mensaje en el juego cuando comienza)\n\tDrop de Cor Draconis 4 h. (Sin día ni hora predefinido, sale el mensaje en el juego cuando comienza).")
 	}
 
 }
 
-func SetTimer(d time.Duration, f func()) {
-	for _ = range time.Tick(d) {
-		f()
-	}
+type TimeEx struct {
+	Hour		int
+	Min			int
+	Sec			int
+	Day			int
+	Weekday		string
+	Month		string
+	Full	 	string
+	Year		int
 }
 
-func Updater() {
-	t := cestTime()
+func CEST()	TimeEx {
+	t := TimeEx{}
 
-	if strings.Contains(t.dayna,"Lunes") {
-		if t.hour >= 10 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl drop de supermonturas ha empezado y terminará a las 12 PM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true
-			}
-		} else {
-			warning = false
-		}
-	}
-
-	if strings.Contains(t.dayna,"Martes") {
-		if t.hour >= 4 && t.hour < 6 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl drop de supermonturas ha empezado y terminará a las 6 PM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true				
-			}
-		} else {
-			warning = false
-		}
-	}
-
-	if strings.Contains(t.dayna,"Mi") {
-		if t.hour >= 23 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl drop de supermonturas ha empezado y terminará a las 1 AM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true				
-			}
-		} else {
-			warning = false
-		}
-	}
-
-	if strings.Contains(t.dayna,"Jueves") {
-		if t.hour >= 1 && t.hour < 3 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl drop de supermonturas ha empezado y terminará a las 3 PM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true				
-			}
-		} else {
-			warning = false
-		}
-	}	
-
-	if strings.Contains(t.dayna,"Viernes") {
-		if t.hour >= 6 && t.hour < 8 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl drop de supermonturas ha empezado y terminará a las 8 PM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true				
-			}
-		} else {
-			warning = false
-		}
-	}
-
-	if strings.Contains(t.dayna,"bado") {
-		if t.hour >= 1 && t.hour < 3 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl Festival de la Cosecha ha comenzado.\nEl drop de supermonturas ha empezado y terminará a las 3 PM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true
-			}
-		} else {
-			warning = false
-		}
-	}	
-
-	if strings.Contains(t.dayna,"Domingo") {
-		if t.hour >= 1 && t.hour < 3 && t.apm == "PM" {
-			if warning == false {
-				_, _ = conf.dSession.ChannelMessageSend(conf.dChannel,"@everyone \nEl drop de supermonturas ha empezado y terminará a las 3 PM. Hora actual CEST: " + strconv.Itoa(t.hour) + ":" + strconv.Itoa(t.min))
-				warning = true				
-			}
-		} else {
-			warning = false
-		}
-	}	
-
-}
-
-type Taimu struct {
-	apm		string
-	hour	int
-	min		int
-	sec		int
-	daynu	int
-	dayna	string
-	monthna	string
-}
-
-func cestTime() Taimu {
-	t := Taimu{}
-
-	resp, err := http.Get("https://24timezones.com/es_husohorario/madrid_hora_actual.php")
+	locat, err := time.LoadLocation("Europe/Madrid")
 	check(err)
 
-	root, err := html.Parse(resp.Body)
-	check(err)
-
-	matcher := func(n *html.Node) bool {
-		if n.DataAtom == atom.Span {
-			return scrape.Attr(n, "id") == "currentTime"
-		}
-		return false
-	}
-
-	var hourstr string
-
-	timestr, _ := scrape.Find(root,matcher)
-
-	fmt.Sscanf(strings.Replace(scrape.Text(timestr), ",","",-1),"%s %s %s %d %s", &hourstr, &t.apm, &t.dayna, &t.daynu, &t.monthna) //04:41:39 PM, Domingo 10, septiembre 2017
-
-	hourarray := strings.Split(hourstr,":")
-
-	t.hour, _ = strconv.Atoi(hourarray[0])
-	t.min, _ = strconv.Atoi(hourarray[1])
-	t.sec, _ = strconv.Atoi(hourarray[2])
+	cest := time.Now().In(locat)
+	var vemonth time.Month
+	t.Year, vemonth, t.Day = cest.Date()
+	t.Month = vemonth.String()
+	t.Hour, t.Min, t.Sec = cest.Clock()
+	t.Weekday = cest.Weekday().String()
+	t.Full = cest.Format(time.RFC850)
 
 	return t
 }
 
-func serverTime() Taimu {
-	timenow := time.Now().Format(time.RFC850)
-	taimu := Taimu{}
+func Updater() {
+	t := CEST()
 
-	var hourstr, datestr string
+	switch t.Weekday {
+		case "Monday":
+			if t.Hour >= 22 && t.Hour < 24 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true
+				}
+			} else if warning == true {
+				_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+				warning = false
+			}
 
-	fmt.Sscanf(timenow,"%s %s %5s",&taimu.dayna, &datestr, &hourstr)//Sunday, 10-Sep-17 09:45:28 -04
-	
-	hourminsec := strings.Split(hourstr,":")
-	daymonthyear := strings.Split(datestr,"-")
+		case "Tuesday":
+			if t.Hour >= 16 && t.Hour < 18 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true				
+				}
+			} else if warning == true {
+				_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+				warning = false
+			}
 
-	taimu.hour, _ = strconv.Atoi(hourminsec[0])
-	taimu.min, _ = strconv.Atoi(hourminsec[1])
-	taimu.sec, _ = strconv.Atoi(hourminsec[2])
-	taimu.daynu, _ = strconv.Atoi(daymonthyear[0])
-	taimu.monthna = daymonthyear[1]
+		case "Wednesday":
+			if t.Hour >= 23 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true				
+				}
+			}
 
-	return taimu
+		case "Thursday":
+			if t.Hour >= 13 && t.Hour < 15 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true				
+				}
+			} else if warning == true {
+				if t.Hour > 1 && t.Hour <= 2 {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+					warning = false
+					return
+				}
+				_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+				warning = false
+			}
+
+		case "Friday":
+			if t.Hour >= 18 && t.Hour < 20 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true				
+				}
+			} else if warning == true {
+				_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+				warning = false
+			}
+
+		case "Saturday":
+			if t.Hour >= 13 && t.Hour < 15 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl Festival de la Cosecha ha comenzado.\nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true
+				}
+			} else if warning == true {
+				_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+				warning = false
+			}
+
+		case "Sunday":
+			if t.Hour >= 13 && t.Hour < 15 {
+				if warning == false {
+					_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha empezado y terminará en dos horas. Hora actual CEST: " + t.Full)
+					warning = true				
+				}
+			} else if warning == true {
+				_, _ = conf.Session.ChannelMessageSend(conf.Channel,"@everyone \nEl drop de supermonturas ha terminado. Hora actual CEST: " + t.Full)
+				warning = false
+			}
+	}
+
+	_ = time.AfterFunc(5 * time.Minute, Updater)
 }
 
 func check(e error) {
 	if e != nil {
-		panic(e)
+		log.Panic(e)
 	}
 }
