@@ -4,7 +4,8 @@ import (
 	"strings"
 	"log"
 	"time"
-	"io/ioutil"
+	"os"
+	"encoding/json"
 	"github.com/bwmarrin/discordgo"
 	"net/http"
 	"github.com/yhat/scrape"
@@ -19,29 +20,26 @@ var (
 
 type Configuration struct {
 	Session 	*discordgo.Session
-	Channel		string
-	BotID 		string
-	Token		string
-	World		string
+	Channel		string	`json:"channel"`
+	BotID 		string 
+	Token		string 	`json:"token"`
 }
 
 func main() {
 	var err error
 
 	//Configuration Loader
-	filebuff, err := ioutil.ReadFile("uriel_config.ini")
+	handler, err := os.Open("uriel_config.json")
 	if err != nil {
 		log.Println("No configuration file found.")
-		panic(err)
+		log.Panic(err)
 	}
 
-	fileconts := strings.Split(string(filebuff),"\r\n")
-	if len(fileconts) < 2 {
-		log.Println("No configuration file found.")
-		panic(err)
-	}
-	conf.Token = fileconts[0]
-	conf.Channel = fileconts[1]
+	err = json.NewDecoder(handler).Decode(&conf)
+	check(err)
+
+	err = handler.Close()
+	check(err)
 	// ----------------------------
 
 	conf.Session, err = discordgo.New("Bot " + conf.Token)
@@ -117,6 +115,10 @@ func ChatMonitor(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	if m.ChannelID != conf.Channel {
+		return
+	}
+
 	if !strings.HasPrefix(m.Content, "!") {
 		return
 	}
@@ -141,9 +143,9 @@ func ChatMonitor(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 type TimeEx struct {
 	Hour		int
-	Min		int
-	Sec		int
-	Day		int
+	Min			int
+	Sec			int
+	Day			int
 	Weekday		string
 	Month		string
 	Full	 	string
